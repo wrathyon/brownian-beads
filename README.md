@@ -15,9 +15,10 @@ A computational physics and computer vision system implemented in Java that repl
 - [Project Directory Structure](#-project-directory-structure)
 - [Mathematical & Physical Formulations](#-mathematical--physical-formulations)
 - [Components & API Specification](#-components--api-specification)
-  - [1. Imaging & Blob Detection (`Blob`, `BeadFinder`)](#1-imaging--blob-detection-blob-beadfinder)
-  - [2. Particle Tracking (`BeadTracker`)](#2-particle-tracking-beadtracker)
-  - [3. Statistical Physics & Estimation (`Avogadro`)](#3-statistical-physics--estimation-avogadro)
+  - [1. Domain Models (`model.IBlob`, `model.Blob`)](#1-domain-models-modeliblob-modelblob)
+  - [2. Imaging & Segmentation (`imaging.*`, `BeadFinder`)](#2-imaging--segmentation-imaging-beadfinder)
+  - [3. Particle Tracking (`tracking.*`, `BeadTracker`)](#3-particle-tracking-tracking-beadtracker)
+  - [4. Statistical Physics & Estimation (`physics.*`, `Avogadro`)](#4-statistical-physics--estimation-physics-avogadro)
 - [Build & Execution Guide](#-build--execution-guide)
 - [Sample Execution & Verification](#-sample-execution--verification)
 - [Datasets](#-datasets)
@@ -42,15 +43,14 @@ This software automates Perrin's manual measurements through automated digital i
 
 ```mermaid
 flowchart TD
-    A["Microscopy Frames (run_i/frame*.jpg)"] --> B["Picture (StdLib)"]
-    B --> C["PixelClassifier / LuminanceClassifier"]
+    A["Microscopy Frames (data/run_i/frame*.jpg)"] --> B["imaging.Picture"]
+    B --> C["imaging.PixelClassifier / LuminanceClassifier"]
     C --> D["BeadFinder (Connected Component / DFS)"]
-    D --> E["Blob Collections (Mass >= min_pixels)"]
-    E --> F["BeadTracker / BeadMatcher"]
-    F --> G["Radial Displacements (pixels -> meters)"]
-    G --> H["DiffusionEstimator (Variance & Self-Diffusion D)"]
-    H --> I["Stokes-Einstein Solver (k & Avogadro N_A)"]
-    I --> J["Reported Constants: k = 1.2535e-23, N_A = 6.6329e+23"]
+    D --> E["model.IBlob / model.Blob (Mass >= min)"]
+    E --> F["tracking.BeadMatcher / NearestNeighborMatcher"]
+    F --> G["BeadTracker (Frame-to-Frame Displacements)"]
+    G --> H["physics.DiffusionEstimator (Variance & Self-Diffusion D)"]
+    H --> I["Avogadro (Stokes-Einstein Solver: k & N_A)"]
 ```
 
 ---
@@ -59,32 +59,35 @@ flowchart TD
 
 ```text
 brownian-beads/
-├── README.md                          # Project documentation and team metadata
+├── README.md                          # Project documentation and architecture guide
+├── README_DESIGN.md                   # Detailed design blueprint and implementation roadmap
 ├── .gitignore                         # Build and temporary file exclusions
 │
-├── Picture.java                       # Princeton stdlib image abstraction
-├── Blob.java                          # Core domain object: connected component / bead
-├── BeadFinder.java                    # Entry point & DFS component analysis
-├── BeadTracker.java                   # Entry point & frame-to-frame displacement tracker
-├── Avogadro.java                      # Entry point & thermodynamic constant estimator
+├── BeadFinder.java                    # Entry point: Single-frame bead detection & DFS analysis
+├── BeadTracker.java                   # Entry point: Multi-frame particle tracking orchestrator
+├── Avogadro.java                      # Entry point: Physical constant estimator (stdin stream)
 │
-├── imaging/                           # Package: Image processing & segmentation
-│   ├── PixelClassifier.java           # Strategy interface for foreground classification
-│   └── LuminanceClassifier.java       # Concrete luminance-based threshold classifier
+├── model/                             # Package: Core domain abstractions and models
+│   ├── IBlob.java                     # Interface representing a particle / connected component
+│   └── Blob.java                      # Concrete bead implementation with center-of-mass tracking
 │
-├── tracking/                          # Package: Multi-frame trajectory association
-│   ├── BeadMatcher.java               # Strategy interface for bead matching
-│   └── NearestNeighborMatcher.java    # Nearest-neighbor Euclidean spatial matcher
+├── imaging/                           # Package: Image processing and pixel classification
+│   ├── Picture.java                   # 2D digital image representation and color abstraction
+│   ├── PixelClassifier.java           # Strategy interface for pixel foreground/background classification
+│   └── LuminanceClassifier.java       # Photometric luminance thresholding strategy
 │
-├── physics/                           # Package: Statistical thermodynamics
-│   ├── DiffusionEstimator.java        # Einstein-Smoluchowski & Stokes-Einstein calculations
-│   └── PhysicalConstants.java         # Immutable physical and fluid constants
+├── tracking/                          # Package: Frame-to-frame particle trajectory matching
+│   ├── BeadMatcher.java               # Strategy interface for matching beads across consecutive frames
+│   └── NearestNeighborMatcher.java    # Greedy nearest-neighbor spatial matching implementation
 │
-└── data/                              # Experimental video frames and sample data
+├── physics/                           # Package: Statistical thermodynamics and physical estimation
+│   ├── PhysicalConstants.java         # Immutable physical and fluid constant definitions
+│   └── DiffusionEstimator.java        # Einstein-Smoluchowski diffusion & Stokes-Einstein calculations
+│
+└── data/                              # Experimental video recordings and frame sequences
     ├── brownian.gif                   # Brownian motion visualization
-    ├── mp4/                           # Raw experimental video recordings (run_1.mp4 - run_10.mp4)
-    ├── run_1/                         # 200 microscopy frames (frame00000.jpg - frame00199.jpg)
-    └── ...                            # run_2 through run_10 datasets
+    ├── mp4/                           # Raw video recordings (run_1.mp4 - run_10.mp4)
+    └── run_1/ ... run_10/             # Sequential microscopy frames (frame00000.jpg - frame00199.jpg)
 ```
 
 ---
@@ -130,51 +133,122 @@ $$N_A = \frac{R}{k}$$
 
 ## 💻 Components & API Specification
 
-### 1. Imaging & Blob Detection (`Blob`, `BeadFinder`)
+### 1. Domain Models (`model.IBlob`, `model.Blob`)
 
-- **`Blob` API**:
+- **`model.IBlob` Interface**:
+  Defines the abstraction contract for a particle / connected component:
 
   ```java
-  public class Blob {
-      public Blob();                          // Creates an empty blob
-      public void add(int x, int y);          // Adds pixel (x, y) to this blob
-      public int mass();                      // Number of pixels in the blob
-      public double distanceTo(Blob that);    // Euclidean distance between centers of mass
-      public String toString();               // Returns "%2d (%8.4f, %8.4f)", mass, x, y
+  package model;
+
+  public interface IBlob {
+      double getCenterX();
+      double getCenterY();
+      int mass();
+      void add(double x, double y);
+      double distanceTo(IBlob that);
   }
   ```
 
-- **`BeadFinder` API**:
+- **`model.Blob` Implementation**:
+  Maintains cumulative coordinates $(\sum x, \sum y)$ and pixel mass count:
+
+  ```java
+  package model;
+
+  public class Blob implements IBlob {
+      public Blob();                          // Creates an empty blob accumulator
+      public double getCenterX();             // Returns center-of-mass x (sumX / mass)
+      public double getCenterY();             // Returns center-of-mass y (sumY / mass)
+      public int mass();                      // Returns total pixel count
+      public void add(double x, double y);    // Adds coordinate (x, y) to the blob
+      public double distanceTo(IBlob that);   // Euclidean distance between centroids
+      public String toString();               // Formatted as: "%2d (%8.4f, %8.4f)"
+  }
+  ```
+
+### 2. Imaging & Segmentation (`imaging.*`, `BeadFinder`)
+
+- **`imaging.Picture`**:
+  Wrapper around digital 2D images allowing individual pixel coordinate access and RGB color extraction (`get(col, row)`, `width()`, `height()`).
+
+- **`imaging.PixelClassifier` Interface**:
+  Strategy interface decoupling pixel segmentation rules from image traversal:
+
+  ```java
+  package imaging;
+  import java.awt.Color;
+
+  public interface PixelClassifier {
+      boolean isForeground(Color color);
+  }
+  ```
+
+- **`imaging.LuminanceClassifier`**:
+  Calculates ITU-R/NTSC photometric luminance:
+  $$Y = 0.299 \times R + 0.587 \times G + 0.114 \times B$$
+  Returns `true` if $Y \ge \tau$ (foreground bead pixel), `false` otherwise.
+
+- **`BeadFinder`**:
+  Performs single-frame segmentation using 4-connected Depth-First Search (DFS):
 
   ```java
   public class BeadFinder {
-      // Finds all blobs with luminance >= tau
+      // Initializes segmentation structures with luminance threshold tau
       public BeadFinder(Picture picture, double tau);
 
-      // Returns all beads (blobs with mass >= min)
-      public Blob[] getBeads(int min);
+      // Traverses image and labels connected components via DFS
+      public void detectBlobs();
 
-      // Test client: java BeadFinder min tau frame.jpg
+      // Returns all beads with mass >= min
+      public List<IBlob> getBeads(int min);
+
+      // Test client: java BeadFinder <min> <tau> <image_path>
       public static void main(String[] args);
   }
   ```
 
-### 2. Particle Tracking (`BeadTracker`)
+### 3. Particle Tracking (`tracking.*`, `BeadTracker`)
 
-- Identifies beads in frame $t$ and frame $t + \Delta t$.
-- For every bead in $t + \Delta t$, finds the nearest bead in frame $t$.
-- If Euclidean distance $r \le \delta$, writes displacement $r$ formatted to 4 decimal places (`%.4f`).
-- **CLI Usage**:
+- **`tracking.BeadMatcher` Interface**:
+  Strategy contract for multi-frame particle correspondence:
 
-  ```bash
-  java BeadTracker min tau delta frame1.jpg frame2.jpg ...
+  ```java
+  package tracking;
+  import java.util.List;
+  import model.IBlob;
+
+  public interface BeadMatcher {
+      List<Double> match(List<IBlob> current, List<IBlob> previous, int maxDistance);
+  }
   ```
 
-### 3. Statistical Physics & Estimation (`Avogadro`)
+- **`tracking.NearestNeighborMatcher`**:
+  Greedy nearest-neighbor association:
+  - For each particle in the `current` frame, finds the nearest particle in the `previous` frame via Euclidean distance.
+  - Matches with displacement $< \text{maxDistance}$ are retained and returned.
 
-- Reads radial displacement stream ($r_1, r_2, \dots$) from standard input.
-- Computes $D$, $k$, and $N_A$.
-- **CLI Usage**:
+- **`BeadTracker`**:
+  CLI entry point orchestrating particle tracking across frame sequences:
+  - Reads consecutive frame pairs (`frame[i]` and `frame[i+1]`).
+  - Detects beads via `BeadFinder` and matches pairs via `BeadMatcher`.
+  - Outputs displacement stream formatted to 4 decimal places (`%.4f`).
+  - **CLI Usage**:
+
+    ```bash
+    java BeadTracker <min> <tau> <delta> frame1.jpg frame2.jpg ...
+    ```
+
+### 4. Statistical Physics & Estimation (`physics.*`, `Avogadro`)
+
+- **`physics.PhysicalConstants`**:
+  Encapsulates fluid dynamics and physical constants ($T$, $\eta$, $\rho$, $R$, and pixel-to-meter factor $s = 0.175 \times 10^{-6}\text{ m/pixel}$).
+
+- **`physics.DiffusionEstimator`**:
+  Statistical engine computing displacement variance $\sigma^2$, self-diffusion coefficient $D$, Boltzmann's constant $k$, and Avogadro's number $N_A$.
+
+- **`Avogadro`**:
+  CLI entry point consuming standard input displacement streams:
 
   ```bash
   java Avogadro < displacements.txt
@@ -186,15 +260,15 @@ $$N_A = \frac{R}{k}$$
 
 ### Prerequisites
 
-- Java Development Kit (JDK 11 or higher)
+- Java Development Kit (JDK 11 or higher; tested on OpenJDK 21 / 25)
 - Standard terminal / command line environment
 
 ### Compilation
 
-Compile all core classes and domain packages from the root directory:
+Compile all domain models, imaging, tracking, physics packages, and entry points:
 
 ```bash
-javac Picture.java Blob.java BeadFinder.java BeadTracker.java Avogadro.java imaging/*.java tracking/*.java physics/*.java
+javac model/*.java imaging/*.java tracking/*.java physics/*.java BeadFinder.java BeadTracker.java Avogadro.java
 ```
 
 ---
