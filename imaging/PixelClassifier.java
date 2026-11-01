@@ -1,5 +1,7 @@
 package imaging;
 
+import java.awt.Color;
+
 public interface PixelClassifier {
-    boolean isForeground(java.awt.Color color);
+    boolean isForeground(Color color);
 }

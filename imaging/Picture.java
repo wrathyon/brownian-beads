@@ -1,3 +1,5 @@
+package imaging;
+
 /******************************************************************************
  *  Compilation:  javac Picture.java
  *  Execution:    java Picture filename.jpg

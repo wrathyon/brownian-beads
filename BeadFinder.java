@@ -1,13 +1,16 @@
 import java.util.ArrayList;
 import java.util.List;
 
+import model.IBlob;
+import model.Blob;
 import imaging.LuminanceClassifier;
+import imaging.Picture;
 import imaging.PixelClassifier;
 
 public class BeadFinder {
     private final Picture picture;
-    private final List<Blob> blobs;
-    private final boolean[][] beads;
+    private final List<IBlob> blobs;
+    private final boolean[][] foregroundPixels;
     private final boolean[][] isVisited;
     private final PixelClassifier classifier;
 
@@ -19,37 +22,37 @@ public class BeadFinder {
         this.classifier = new LuminanceClassifier(tau);
         this.blobs = new ArrayList<>();
 
-        int width = picture.width();
-        int height = picture.height();
-        this.beads = new boolean[width][height];
-        this.isVisited = new boolean[width][height];
+        this.foregroundPixels = new boolean[picture.width()][picture.height()];
+        this.isVisited = new boolean[picture.width()][picture.height()];
+    }
 
-        for (int col = 0; col < width; col++) {
-            for (int row = 0; row < height; row++) {
-                beads[col][row] = classifier.isForeground(picture.get(col, row));
+    public void detectBlobs() {
+        for (int col = 0; col < this.picture.width(); col++) {
+            for (int row = 0; row < this.picture.height(); row++) {
+                this.foregroundPixels[col][row] = this.classifier.isForeground(this.picture.get(col, row));
             }
         }
 
-        for (int col = 0; col < width; col++) {
-            for (int row = 0; row < height; row++) {
-                if (beads[col][row] && !isVisited[col][row]) {
-                    Blob blob = new Blob();
-                    dfs(col, row, blob);
-                    blobs.add(blob);
+        for (int col = 0; col < this.picture.width(); col++) {
+            for (int row = 0; row < this.picture.height(); row++) {
+                if (this.foregroundPixels[col][row] && !isVisited[col][row]) {
+                    IBlob blob = new Blob();
+                    this.dfs(col, row, blob);
+                    this.blobs.add(blob);
                 }
             }
         }
     }
 
-    private void dfs(int col, int row, Blob blob) {
-        if (col < 0 || col >= picture.width() || row < 0 || row >= picture.height()) {
+    private void dfs(int col, int row, IBlob blob) {
+        if (col < 0 || col >= this.picture.width() || row < 0 || row >= this.picture.height()) {
             return;
         }
-        if (isVisited[col][row] || !beads[col][row]) {
+        if (this.isVisited[col][row] || !this.foregroundPixels[col][row]) {
             return;
         }
 
-        isVisited[col][row] = true;
+        this.isVisited[col][row] = true;
         blob.add(col, row);
 
         dfs(col + 1, row, blob);
@@ -58,14 +61,14 @@ public class BeadFinder {
         dfs(col, row - 1, blob);
     }
 
-    public Blob[] getBeads(int min) {
-        List<Blob> filtered = new ArrayList<>();
-        for (Blob blob : this.blobs) {
+    public List<IBlob> getBeads(int min) {
+        List<IBlob> filtered = new ArrayList<>();
+        for (IBlob blob : this.blobs) {
             if (blob.mass() >= min) {
                 filtered.add(blob);
             }
         }
-        return filtered.toArray(new Blob[0]);
+        return filtered;
     }
 
     public static void main(String[] args) {
@@ -77,10 +80,11 @@ public class BeadFinder {
         double tau = Double.parseDouble(args[1]);
         String imagePath = args[2];
 
-        Picture picture = new Picture(imagePath);
-        BeadFinder bf = new BeadFinder(picture, tau);
+        Picture image = new Picture(imagePath);
+        BeadFinder bf = new BeadFinder(image, tau);
+        bf.detectBlobs();
 
-        for (Blob blob : bf.getBeads(min)) {
+        for (IBlob blob : bf.getBeads(min)) {
             System.out.println(blob);
         }
     }
