@@ -700,19 +700,6 @@ public final class Picture implements ActionListener {
         this.title = title;
     }
 
-    // does this picture use transparency (i.e., alpha < 255 for some pixel)?
-    // (method not currently in used)
-    private boolean usesAlpha() {
-        for (int col = 0; col < width; col++) {
-            for (int row = 0; row < height; row++) {
-                int argb = image.getRGB(col, row);
-                int alpha =  (argb >> 24) & 0xFF;
-                if (alpha != 255) return true;
-            }
-        }
-        return false;
-    }
-
    /**
      * Saves the picture to a file in a supported file format
      * (typically JPEG, PNG, GIF, TIFF, and BMP).
