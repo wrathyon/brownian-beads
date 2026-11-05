@@ -7,18 +7,22 @@ import model.IBlob;
 
 public class BeadTracker {
     private final List<List<IBlob>> blobsList;
-    private final BeadMatcher bm;
+    private final BeadMatcher beadMatcher;
 
-    public BeadTracker(List<List<IBlob>> blobsList, double maxDistance){
+    public BeadTracker(List<List<IBlob>> blobsList) {
         this.blobsList = blobsList;
-        this.bm = new NearestNeighborMatcher(maxDistance);
+        this.beadMatcher = new NearestNeighborMatcher();
     }
 
-    public List<List<Double>> trackDistance() {
+    public List<List<Double>> trackDistance(double maxDistance) {
         List<List<Double>> displacements = new ArrayList<>();
+
         for (int i = 0; i < blobsList.size() - 1; i++) {
-            displacements.add(bm.match(this.blobsList.get(i + 1), this.blobsList.get(i)));
+            displacements.add(
+                beadMatcher.matchDistance(this.blobsList.get(i + 1), this.blobsList.get(i), maxDistance)
+            );
         }
+
         return displacements;
     }
 }

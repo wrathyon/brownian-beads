@@ -1,5 +1,5 @@
 package imaging;
 
 public interface ImageConvertor {
-    Picture convert(boolean[][] whitePixels);
+    Picture convert(Picture image);
 }

@@ -10,106 +10,110 @@ import imaging.LuminanceClassifier;
 import imaging.Picture;
 import imaging.PixelClassifier;
 import model.IBlob;
+import physics.Estimator;
 import tracking.BeadTracker;
 
 public class Main {
     public static void main(String[] args) {
-        if (args[0].charAt(0) == '-' && args[0].charAt(1) == 'd') {
-            if (args.length < 3) {
-                System.err.println("Usage: java Main <min> <tau> <image_path>");
-                System.exit(1);
-            }
-
-            int min = Integer.parseInt(args[1]);
-            if (min < 0) {
-                System.err.println("invalid value for min");
-                System.exit(1);
-            }
-
-            double tau = Double.parseDouble(args[2]);
-            if (tau < 0 || tau > 255) {
-                System.err.println("invalid value for tau");
-                System.exit(1);
-            }
-
-            String imagePath = args[3];
-
-            Picture image = new Picture(imagePath);
-            PixelClassifier pc = new LuminanceClassifier(image, tau);
-            ImageConvertor ic = new GrayscaleConvertor(image);
-            Picture grayscaled = ic.convert(pc.getForegroundPixels());
-
-            BlobDetector bd = new BlobDetector(grayscaled, pc.getForegroundPixels());
-            List<IBlob> blobs = bd.detectBlobs();
-            BeadFinder bf = new BeadFinder(blobs);
-
-            for (IBlob blob : bf.findBeads(min)) {
-                System.out.println(blob);
-            }
-
-            grayscaled.save("grayscaled.jpg");
-        } else if (args[0].charAt(0) == '-' && args[0].charAt(1) == 't') {
-            int min = Integer.parseInt(args[1]);
-            double tau = Double.parseDouble(args[2]);
-            int maxDistance = Integer.parseInt(args[3]);
-
-            List<Picture> images = new ArrayList<>();
-            for (String path : Arrays.copyOfRange(args, 4, args.length)) {
-                images.add(new Picture(path));
-            }
-
-            List<List<IBlob>> blobsList = new ArrayList<>();
-            for (Picture image : images) {
-                PixelClassifier pc = new LuminanceClassifier(image, tau);
-                ImageConvertor ic = new GrayscaleConvertor(image);
-                Picture grayscaled = ic.convert(pc.getForegroundPixels());
-
-                BlobDetector bd = new BlobDetector(grayscaled, pc.getForegroundPixels());
-                BeadFinder bf = new BeadFinder(bd.detectBlobs());
-                blobsList.add(bf.findBeads(min));
-            }
-
-            BeadTracker bt = new BeadTracker(blobsList, maxDistance);
-            List<List<Double>> displacements = bt.trackDistance();
-            for(List<Double> displacement:displacements){
-                for(Double distance : displacement)
-                    System.out.format("%6.4f\n",distance);
-            }
+        if (args.length < 4) {
+            usage();
+            return;
         }
-        else if (args[0].charAt(0)=='-' && args[0].charAt(1)=='a'){
-            int min = Integer.parseInt(args[1]);
-            double tau = Double.parseDouble(args[2]);
-            int maxDistance = Integer.parseInt(args[3]);
 
-            List<Picture> images = new ArrayList<>();
-            for (String path : Arrays.copyOfRange(args, 4, args.length)) {
-                images.add(new Picture(path));
-            }
-
-            List<List<IBlob>> blobsList = new ArrayList<>();
-            for (Picture image : images) {
-                PixelClassifier pc = new LuminanceClassifier(image, tau);
-                ImageConvertor ic = new GrayscaleConvertor(image);
-                Picture grayscaled = ic.convert(pc.getForegroundPixels());
-
-                BlobDetector bd = new BlobDetector(grayscaled, pc.getForegroundPixels());
-                BeadFinder bf = new BeadFinder(bd.detectBlobs());
-                blobsList.add(bf.findBeads(min));
-            }
-
-            BeadTracker bt = new BeadTracker(blobsList, maxDistance);
-            List<List<Double>> displacements = bt.trackDistance();
-
-            List<Double> damn = new ArrayList<>();
-            for (List<Double> distances : displacements) {
-                for (double dist : distances) {
-                    damn.add(dist);
+        try {
+            switch (args[0]) {
+                case "beads" -> {
+                    if (args.length != 4) {
+                        usage();
+                        return;
+                    }
+                    runBeads(args);
                 }
+                case "track" -> {
+                    if (args.length < 6) {
+                        usage();
+                        return;
+                    }
+                    runTrack(args);
+                }
+                case "estimate" -> {
+                    if (args.length < 6) {
+                        usage();
+                        return;
+                    }
+                    runEstimate(args);
+                }
+                default -> usage();
             }
-            Avogadro avogadro = new Avogadro(damn);
-
-            System.out.println("Boltzmann: " + avogadro.calculateBoltzmann());
-            System.out.println("Avogadro: " + avogadro.calculateAvogadro());
+        } catch (NumberFormatException e) {
+            System.err.println(e.getMessage());
+            usage();
         }
+    }
+
+    private static void runBeads(String[] args) {
+        int min = Integer.parseInt(args[1]);
+        double tau = Double.parseDouble(args[2]);
+        String path = args[3];
+
+        PixelClassifier classifier = new LuminanceClassifier(tau);
+        ImageConvertor convertor = new GrayscaleConvertor(classifier);
+        Picture grayscaled = convertor.convert(new Picture(path));
+
+        List<IBlob> blobs = new BlobDetector().detect(classifier.getForegroundPixels(grayscaled));
+        for (IBlob bead : BeadFinder.filter(blobs, min)) {
+            System.out.println(bead);
+        }
+
+        grayscaled.show();
+    }
+
+    private static void runTrack(String[] args) {
+        for (double displacement : trackAll(args)) {
+            System.out.println(displacement);
+        }
+    }
+
+    private static void runEstimate(String[] args) {
+        Estimator estimator = new Estimator(trackAll(args));
+        System.out.println("Boltzmann = " + estimator.calculateBoltzmann());
+        System.out.println("Avogadro  = " + estimator.calculateAvogadro());
+    }
+
+    private static List<Double> trackAll(String[] args) {
+        int min = Integer.parseInt(args[1]);
+        double tau = Double.parseDouble(args[2]);
+        double maxDistance = Double.parseDouble(args[3]);
+
+        PixelClassifier classifier = new LuminanceClassifier(tau);
+        ImageConvertor convertor = new GrayscaleConvertor(classifier);
+        BlobDetector detector = new BlobDetector();
+
+        List<List<IBlob>> blobsList = new ArrayList<>();
+        for (String path : Arrays.copyOfRange(args, 4, args.length)) {
+            Picture grayscaled = convertor.convert(new Picture(path));
+            List<IBlob> blobs = detector.detect(classifier.getForegroundPixels(grayscaled));
+            blobsList.add(BeadFinder.filter(blobs, min));
+        }
+
+        BeadTracker beadTracker = new BeadTracker(blobsList);
+        List<List<Double>> displacements = beadTracker.trackDistance(maxDistance);
+
+        List<Double> all = new ArrayList<>();
+        for (List<Double> displacement : displacements) {
+            for (double distance : displacement) {
+                all.add(distance);
+            }
+        }
+        return all;
+    }
+
+    private static void usage() {
+        System.err.println("""
+            Usage:
+              beads    <min> <tau> <image>
+              track    <min> <tau> <maxDistance> <image>...
+              estimate <min> <tau> <maxDistance> <image>...""");
+        System.exit(1);
     }
 }

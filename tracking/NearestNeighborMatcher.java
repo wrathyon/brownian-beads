@@ -6,14 +6,8 @@ import java.util.List;
 import model.IBlob;
 
 public class NearestNeighborMatcher implements BeadMatcher {
-    private final double maxDistance;
-
-    public NearestNeighborMatcher(double maxDistance) {
-        this.maxDistance = maxDistance;
-    }
-
     @Override
-    public List<Double> match(List<IBlob> current, List<IBlob> previous) {
+    public List<Double> matchDistance(List<IBlob> current, List<IBlob> previous, double maxDistance) {
         List<Double> displacements = new ArrayList<>();
 
         for (int i = 0; i < current.size(); i++) {
