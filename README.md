@@ -1,333 +1,309 @@
-# Atomic Nature of Matter: Brownian Motion & Avogadro Estimation
+# Brownian Beads — Atomic Nature of Matter
 
-[![Java](https://img.shields.io/badge/Java-11%2B-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
-[![License](https://img.shields.io/badge/License-Academic-blue?style=for-the-badge)](#academic-integrity--submission)
-[![Architecture](https://img.shields.io/badge/Design-SOLID%20Principles-brightgreen?style=for-the-badge)](#architecture--solid-design-principles)
+[![Java](https://img.shields.io/badge/Java-11%2B-ED8B00?style=flat-square&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
+[![Architecture](https://img.shields.io/badge/Design-SOLID%20Principles-brightgreen?style=flat-square)](#architecture)
 
-A computational physics and computer vision system implemented in Java that replicates Jean Baptiste Perrin's 1908 Nobel Prize-winning experiment. By tracking microscopic polystyrene beads undergoing Brownian motion in water, the project validates Albert Einstein's 1905 kinetic theory and estimates fundamental physical constants: **Boltzmann's Constant ($k$)** and **Avogadro's Number ($N_A$)**.
+A computational physics and computer vision system in Java that replicates Jean Baptiste Perrin's Nobel Prize-winning experiment (1926). By tracking microscopic polystyrene beads undergoing Brownian motion in water, the project validates Albert Einstein's 1905 kinetic theory and estimates two fundamental physical constants: **Boltzmann's constant (*k*)** and **Avogadro's number (*N_A*)**.
 
 ---
 
-## 📑 Table of Contents
+## Table of Contents
 
-- [Scientific Background & Overview](#-scientific-background--overview)
-- [System Architecture & Pipeline](#-system-architecture--pipeline)
-- [Project Directory Structure](#-project-directory-structure)
-- [Mathematical & Physical Formulations](#-mathematical--physical-formulations)
-- [Components & API Specification](#-components--api-specification)
-  - [1. Domain Models (`model.IBlob`, `model.Blob`)](#1-domain-models-modeliblob-modelblob)
-  - [2. Imaging & Segmentation (`imaging.*`, `BeadFinder`)](#2-imaging--segmentation-imaging-beadfinder)
-  - [3. Particle Tracking (`tracking.*`, `BeadTracker`)](#3-particle-tracking-tracking-beadtracker)
-  - [4. Statistical Physics & Estimation (`physics.*`, `Avogadro`)](#4-statistical-physics--estimation-physics-avogadro)
-- [Build & Execution Guide](#-build--execution-guide)
-- [Sample Execution & Verification](#-sample-execution--verification)
+- [Scientific Background](#-scientific-background)
+- [Architecture](#-architecture)
+- [Project Structure](#-project-structure)
+- [Mathematical Formulation](#-mathematical-formulation)
+- [Package & API Reference](#-package--api-reference)
+- [Build & Run](#-build--run)
 - [Datasets](#-datasets)
 
 ---
 
-## 🔬 Scientific Background & Overview
+## 🔬 Scientific Background
 
-In 1827, botanist Robert Brown observed erratic jittering of microscopic pollen grains suspended in water. In 1905, Albert Einstein formulated the first quantitative mathematical theory of this **Brownian Motion**, attributing the random movement to continuous statistical collisions with millions of invisible water molecules ($H_2O$).
+In 1827, Robert Brown observed erratic jittering of microscopic pollen grains suspended in water. In 1905, Albert Einstein gave the first rigorous mathematical treatment of this **Brownian motion**, attributing the random walk to continuous collisions with water molecules.
 
-In 1908, Jean Baptiste Perrin conducted precise quantitative ultramicroscopy experiments confirming Einstein's predictions, providing the first definitive empirical proof of the atomic nature of matter and yielding the earliest empirical estimate of Avogadro's constant.
+In 1908, Jean Baptiste Perrin conducted precise ultramicroscopy experiments that confirmed Einstein's predictions, providing the first empirical proof of the atomic nature of matter and an early estimate of Avogadro's constant.
 
-This software automates Perrin's manual measurements through automated digital image processing:
+This project automates Perrin's manual measurements via three automated stages:
 
-1. **Blob Identification**: Discovers polystyrene micro-beads in noisy fluorescent microscopy frames via luminance thresholding and connected component analysis (Depth-First Search).
-2. **Trajectory Tracking**: Tracks bead displacements across sequential video frames ($\Delta t = 0.5\text{ s}$) using nearest-neighbor Euclidean spatial matching.
-3. **Statistical Inference**: Calculates the displacement variance ($\sigma^2$), determines the self-diffusion coefficient ($D$), and solves the **Stokes-Einstein relation** for Boltzmann's constant ($k$) and Avogadro's number ($N_A$).
+1. **Blob detection** – Locates polystyrene micro-beads in noisy fluorescence microscopy frames using luminance thresholding and 4-connected DFS.
+2. **Particle tracking** – Matches beads across consecutive video frames (Δt = 0.5 s) using greedy nearest-neighbour matching.
+3. **Statistical estimation** – Computes displacement variance, the self-diffusion coefficient *D*, Boltzmann's constant *k*, and Avogadro's number *N_A* via the Stokes–Einstein relation.
 
 ---
 
-## 🏗 System Architecture & Pipeline
+## 🏗 Architecture
+
+The system is organised as a clean four-layer pipeline, each layer exposed behind an interface and independently testable:
 
 ```mermaid
 flowchart TD
-    A["Microscopy Frames (data/run_i/frame*.jpg)"] --> B["imaging.Picture"]
-    B --> C["imaging.PixelClassifier / LuminanceClassifier"]
-    C --> D["BeadFinder (Connected Component / DFS)"]
-    D --> E["model.IBlob / model.Blob (Mass >= min)"]
-    E --> F["tracking.BeadMatcher / NearestNeighborMatcher"]
-    F --> G["BeadTracker (Frame-to-Frame Displacements)"]
-    G --> H["physics.DiffusionEstimator (Variance & Self-Diffusion D)"]
-    H --> I["Avogadro (Stokes-Einstein Solver: k & N_A)"]
+    A["Microscopy Frames\n(data/run_i/frame*.jpg)"]
+    A --> B["imaging.Picture\n(pixel access)"]
+    B --> C["imaging.PixelClassifier\n(LuminanceClassifier)"]
+    C --> D["detecting.BlobDetector\n(4-connected DFS)"]
+    D --> E["detecting.BeadFinder\nfilter by min mass"]
+    E --> F["model.IBlob / Blob\n(centroid + mass)"]
+    F --> G["tracking.BeadTracker\n(frame pairs)"]
+    G --> H["tracking.NearestNeighborMatcher\n(greedy NN)"]
+    H --> I["physics.Estimator\n(D, k, N_A)"]
+    I --> J["Main — unified CLI"]
 ```
 
 ---
 
-## 📁 Project Directory Structure
+## 📁 Project Structure
 
 ```text
 brownian-beads/
-├── README.md                          # Project documentation and architecture guide
-├── README_DESIGN.md                   # Detailed design blueprint and implementation roadmap
-├── .gitignore                         # Build and temporary file exclusions
+├── Main.java                      # Unified CLI entry point (beads / track / estimate)
 │
-├── BeadFinder.java                    # Entry point: Single-frame bead detection & DFS analysis
-├── BeadTracker.java                   # Entry point: Multi-frame particle tracking orchestrator
-├── Avogadro.java                      # Entry point: Physical constant estimator (stdin stream)
+├── model/                         # Domain abstractions
+│   ├── IBlob.java                 # Particle interface (centroid, mass, distance)
+│   └── Blob.java                  # Accumulator implementation (centre-of-mass tracking)
 │
-├── model/                             # Package: Core domain abstractions and models
-│   ├── IBlob.java                     # Interface representing a particle / connected component
-│   └── Blob.java                      # Concrete bead implementation with center-of-mass tracking
+├── imaging/                       # Image I/O and pixel classification
+│   ├── Picture.java               # Princeton stdlib Picture wrapper (pixel-level access)
+│   ├── PixelClassifier.java       # Interface: isForeground(Color) + getForegroundPixels()
+│   ├── LuminanceClassifier.java   # ITU-R luminance threshold classifier
+│   ├── ImageConvertor.java        # Interface: convert(Picture) → Picture
+│   └── GrayscaleConvertor.java    # Binarises an image using a PixelClassifier
 │
-├── imaging/                           # Package: Image processing and pixel classification
-│   ├── Picture.java                   # 2D digital image representation and color abstraction
-│   ├── PixelClassifier.java           # Strategy interface for pixel foreground/background classification
-│   └── LuminanceClassifier.java       # Photometric luminance thresholding strategy
+├── detecting/                     # Connected-component analysis
+│   ├── BlobDetector.java          # 4-connected DFS over foreground pixel grid
+│   └── BeadFinder.java            # Static filter: keeps blobs with mass ≥ min
 │
-├── tracking/                          # Package: Frame-to-frame particle trajectory matching
-│   ├── BeadMatcher.java               # Strategy interface for matching beads across consecutive frames
-│   └── NearestNeighborMatcher.java    # Greedy nearest-neighbor spatial matching implementation
+├── tracking/                      # Multi-frame particle correspondence
+│   ├── BeadMatcher.java           # Interface: matchDistance(current, previous, maxDist)
+│   ├── NearestNeighborMatcher.java# Greedy nearest-neighbour implementation
+│   └── BeadTracker.java           # Iterates consecutive frame pairs
 │
-├── physics/                           # Package: Statistical thermodynamics and physical estimation
-│   ├── PhysicalConstants.java         # Immutable physical and fluid constant definitions
-│   └── DiffusionEstimator.java        # Einstein-Smoluchowski diffusion & Stokes-Einstein calculations
+├── physics/                       # Statistical physics
+│   ├── PhysicalConstants.java     # T, η, r, s, R constants
+│   └── Estimator.java             # Variance → D → k → N_A
 │
-└── data/                              # Experimental video recordings and frame sequences
-    ├── brownian.gif                   # Brownian motion visualization
-    ├── mp4/                           # Raw video recordings (run_1.mp4 - run_10.mp4)
-    └── run_1/ ... run_10/             # Sequential microscopy frames (frame00000.jpg - frame00199.jpg)
+└── data/
+    ├── brownian.gif               # Annotated animation of Brownian motion
+    ├── mp4/run_1.mp4 … run_10.mp4 # Raw microscopy videos
+    └── run_1/ … run_10/           # 200 JPEG frames per run (640 × 480 px)
 ```
 
 ---
 
-## ➗ Mathematical & Physical Formulations
+## 📐 Mathematical Formulation
 
-### 1. Blob Center of Mass
+### Luminance threshold
 
-For a connected component containing $P$ pixels with coordinates $(x_i, y_i)$:
-$$\bar{x} = \frac{1}{P} \sum_{i=1}^{P} x_i, \quad \bar{y} = \frac{1}{P} \sum_{i=1}^{P} y_i$$
+Each pixel's brightness is computed with the ITU-R 601 luma formula:
 
-### 2. Radial Displacement Conversion
+$$Y = 0.299\,R + 0.587\,G + 0.114\,B$$
 
-Radial displacement in pixels:
-$$r_i = \sqrt{(\Delta x_i)^2 + (\Delta y_i)^2}$$
-Conversion to SI units (meters) using the microscope spatial resolution:
-$$s = 0.175 \times 10^{-6} \text{ m/pixel}$$
-$$r_{i,\text{meters}} = r_{i,\text{pixels}} \times s$$
+A pixel is foreground (bright bead) if $Y \ge \tau$.
 
-### 3. Einstein-Smoluchowski Diffusion Equation
+### Centroid of a blob
 
-For 2D Brownian motion over frame interval $\Delta t = 0.5\text{ s}$ across $n$ displacements:
-$$\sigma^2 = 2 D \Delta t \implies D = \frac{\sigma^2}{2 \Delta t} = \sigma^2 \quad (\text{since } 2 \times 0.5 = 1)$$
-Variance of displacements:
-$$\hat{\sigma}^2 = \frac{1}{2n} \sum_{i=1}^n r_{i,\text{meters}}^2 = \frac{1}{2n} \sum_{i=1}^n \left( (\Delta x_i)^2 + (\Delta y_i)^2 \right)$$
+For a connected component of $n$ foreground pixels at coordinates $(x_i, y_i)$:
 
-### 4. Stokes-Einstein Relation & Boltzmann's Constant
+$$\bar{x} = \frac{1}{n}\sum_{i=1}^{n} x_i, \qquad \bar{y} = \frac{1}{n}\sum_{i=1}^{n} y_i$$
 
-For a spherical particle moving through a viscous fluid:
-$$D = \frac{k T}{6 \pi \eta \rho} \implies k = \frac{6 \pi \eta \rho D}{T}$$
-**Experimental Constants**:
+### Self-diffusion coefficient
 
-- Absolute Temperature: $T = 297\text{ K}$ ($24^\circ\text{C}$)
-- Water Viscosity: $\eta = 9.135 \times 10^{-4}\text{ N}\cdot\text{s}\cdot\text{m}^{-2}$
-- Bead Radius: $\rho = 0.5 \times 10^{-6}\text{ m}$
+Given $N$ measured displacement magnitudes $r_i$ (in metres):
 
-### 5. Avogadro's Number
+$$D = \frac{1}{2N} \sum_{i=1}^{N} r_i^2$$
 
-With Universal Gas Constant $R = 8.31446\text{ J}\cdot\text{mol}^{-1}\cdot\text{K}^{-1}$:
+(derived from the 2-D Einstein relation $\langle r^2 \rangle = 2D\,\Delta t$ with $\Delta t$ absorbed into the frame-rate calibration.)
+
+### Stokes–Einstein relation → Boltzmann's constant
+
+$$k = \frac{6\pi\,\eta\,\rho\,D}{T}$$
+
+| Symbol | Meaning | Value |
+|---|---|---|
+| $T$ | Temperature | 297 K |
+| $\eta$ | Water viscosity | 9.135 × 10⁻⁴ N s m⁻² |
+| $\rho$ | Bead radius | 0.5 × 10⁻⁶ m |
+| $s$ | Pixel scale | 0.175 × 10⁻⁶ m pixel⁻¹ |
+| $R$ | Gas constant | 8.31446 J mol⁻¹ K⁻¹ |
+
+### Avogadro's number
+
 $$N_A = \frac{R}{k}$$
 
 ---
 
-## 💻 Components & API Specification
+## 📦 Package & API Reference
 
-### 1. Domain Models (`model.IBlob`, `model.Blob`)
+### `model` — Domain objects
 
-- **`model.IBlob` Interface**:
-  Defines the abstraction contract for a particle / connected component:
+```java
+public interface IBlob {
+    double getCenterX();               // x-coordinate of centroid
+    double getCenterY();               // y-coordinate of centroid
+    int    mass();                     // number of pixels in blob
+    void   add(double x, double y);   // accumulate a pixel
+    double distanceTo(IBlob that);    // Euclidean distance between centroids
+}
+```
 
-  ```java
-  package model;
-
-  public interface IBlob {
-      double getCenterX();
-      double getCenterY();
-      int mass();
-      void add(double x, double y);
-      double distanceTo(IBlob that);
-  }
-  ```
-
-- **`model.Blob` Implementation**:
-  Maintains cumulative coordinates $(\sum x, \sum y)$ and pixel mass count:
-
-  ```java
-  package model;
-
-  public class Blob implements IBlob {
-      public Blob();                          // Creates an empty blob accumulator
-      public double getCenterX();             // Returns center-of-mass x (sumX / mass)
-      public double getCenterY();             // Returns center-of-mass y (sumY / mass)
-      public int mass();                      // Returns total pixel count
-      public void add(double x, double y);    // Adds coordinate (x, y) to the blob
-      public double distanceTo(IBlob that);   // Euclidean distance between centroids
-      public String toString();               // Formatted as: "%2d (%8.4f, %8.4f)"
-  }
-  ```
-
-### 2. Imaging & Segmentation (`imaging.*`, `BeadFinder`)
-
-- **`imaging.Picture`**:
-  Wrapper around digital 2D images allowing individual pixel coordinate access and RGB color extraction (`get(col, row)`, `width()`, `height()`).
-
-- **`imaging.PixelClassifier` Interface**:
-  Strategy interface decoupling pixel segmentation rules from image traversal:
-
-  ```java
-  package imaging;
-  import java.awt.Color;
-
-  public interface PixelClassifier {
-      boolean isForeground(Color color);
-  }
-  ```
-
-- **`imaging.LuminanceClassifier`**:
-  Calculates ITU-R/NTSC photometric luminance:
-  $$Y = 0.299 \times R + 0.587 \times G + 0.114 \times B$$
-  Returns `true` if $Y \ge \tau$ (foreground bead pixel), `false` otherwise.
-
-- **`BeadFinder`**:
-  Performs single-frame segmentation using 4-connected Depth-First Search (DFS):
-
-  ```java
-  public class BeadFinder {
-      // Initializes segmentation structures with luminance threshold tau
-      public BeadFinder(Picture picture, double tau);
-
-      // Traverses image and labels connected components via DFS
-      public void detectBlobs();
-
-      // Returns all beads with mass >= min
-      public List<IBlob> getBeads(int min);
-
-      // Test client: java BeadFinder <min> <tau> <image_path>
-      public static void main(String[] args);
-  }
-  ```
-
-### 3. Particle Tracking (`tracking.*`, `BeadTracker`)
-
-- **`tracking.BeadMatcher` Interface**:
-  Strategy contract for multi-frame particle correspondence:
-
-  ```java
-  package tracking;
-  import java.util.List;
-  import model.IBlob;
-
-  public interface BeadMatcher {
-      List<Double> match(List<IBlob> current, List<IBlob> previous, int maxDistance);
-  }
-  ```
-
-- **`tracking.NearestNeighborMatcher`**:
-  Greedy nearest-neighbor association:
-  - For each particle in the `current` frame, finds the nearest particle in the `previous` frame via Euclidean distance.
-  - Matches with displacement $< \text{maxDistance}$ are retained and returned.
-
-- **`BeadTracker`**:
-  CLI entry point orchestrating particle tracking across frame sequences:
-  - Reads consecutive frame pairs (`frame[i]` and `frame[i+1]`).
-  - Detects beads via `BeadFinder` and matches pairs via `BeadMatcher`.
-  - Outputs displacement stream formatted to 4 decimal places (`%.4f`).
-  - **CLI Usage**:
-
-    ```bash
-    java BeadTracker <min> <tau> <delta> frame1.jpg frame2.jpg ...
-    ```
-
-### 4. Statistical Physics & Estimation (`physics.*`, `Avogadro`)
-
-- **`physics.PhysicalConstants`**:
-  Encapsulates fluid dynamics and physical constants ($T$, $\eta$, $\rho$, $R$, and pixel-to-meter factor $s = 0.175 \times 10^{-6}\text{ m/pixel}$).
-
-- **`physics.DiffusionEstimator`**:
-  Statistical engine computing displacement variance $\sigma^2$, self-diffusion coefficient $D$, Boltzmann's constant $k$, and Avogadro's number $N_A$.
-
-- **`Avogadro`**:
-  CLI entry point consuming standard input displacement streams:
-
-  ```bash
-  java Avogadro < displacements.txt
-  ```
+`Blob` implements `IBlob` by accumulating pixel-coordinate sums and dividing on demand.
 
 ---
 
-## 🚀 Build & Execution Guide
+### `imaging` — Pixel classification & binarisation
+
+```java
+// Strategy interface
+public interface PixelClassifier {
+    boolean    isForeground(Color color);
+    boolean[][] getForegroundPixels(Picture image);
+}
+
+// ITU-R luma implementation
+public class LuminanceClassifier implements PixelClassifier { … }
+
+// Converts a colour Picture to a binary (white/black) Picture
+public interface ImageConvertor { Picture convert(Picture image); }
+public class GrayscaleConvertor implements ImageConvertor { … }
+```
+
+---
+
+### `detecting` — Blob detection
+
+```java
+// Runs 4-connected DFS over the foreground boolean grid
+public class BlobDetector {
+    public List<IBlob> detect(boolean[][] foregroundPixels);
+}
+
+// Filters a blob list by minimum mass
+public class BeadFinder {
+    public static List<IBlob> filter(List<IBlob> blobs, int min);
+}
+```
+
+---
+
+### `tracking` — Multi-frame correspondence
+
+```java
+// Strategy interface
+public interface BeadMatcher {
+    List<Double> matchDistance(List<IBlob> current, List<IBlob> previous, double maxDistance);
+}
+
+// Greedy O(n·m) nearest-neighbour implementation
+public class NearestNeighborMatcher implements BeadMatcher { … }
+
+// Iterates consecutive frame pairs and collects displacements
+public class BeadTracker {
+    public BeadTracker(List<List<IBlob>> blobsList);
+    public List<List<Double>> trackDistance(double maxDistance);
+}
+```
+
+---
+
+### `physics` — Estimation engine
+
+```java
+public class PhysicalConstants {
+    public static final double TEMPERATURE    = 297.0;       // K
+    public static final double VISCOSITY      = 9.135E-4;    // N·s/m²
+    public static final double BEAD_RADIUS    = 0.5E-6;      // m
+    public static final double METERS_PER_PIXEL = 0.175E-6;  // m/px
+    public static final double GAS_CONSTANT   = 8.31446;     // J/(mol·K)
+}
+
+public class Estimator {
+    public Estimator(List<Double> displacements);  // pixel displacements
+    public double calculateBoltzmann();
+    public double calculateAvogadro();
+}
+```
+
+---
+
+### `Main` — Unified CLI
+
+All three modes are exposed through a single entry point:
+
+```
+Usage:
+  beads    <min> <tau> <image>
+  track    <min> <tau> <maxDistance> <image>...
+  estimate <min> <tau> <maxDistance> <image>...
+```
+
+| Mode | Description |
+|---|---|
+| `beads` | Detects and prints all blobs with mass ≥ `min` in one image; also displays a binarised preview. |
+| `track` | Prints pixel displacements across consecutive frames to stdout. |
+| `estimate` | Runs the full pipeline and prints Boltzmann's constant and Avogadro's number. |
+
+---
+
+## 🚀 Build & Run
 
 ### Prerequisites
 
-- Java Development Kit (JDK 11 or higher; tested on OpenJDK 21 / 25)
-- Standard terminal / command line environment
+- Java Development Kit (JDK 11 or later; tested with OpenJDK 21/25)
 
-### Compilation
-
-Compile all domain models, imaging, tracking, physics packages, and entry points:
+### Compile
 
 ```bash
-javac model/*.java imaging/*.java tracking/*.java physics/*.java BeadFinder.java BeadTracker.java Avogadro.java
+javac model/*.java imaging/*.java detecting/*.java tracking/*.java physics/*.java Main.java
 ```
 
----
+### Examples
 
-## 🧪 Sample Execution & Verification
-
-### Step 1: Detect Beads in a Single Frame
+**Detect beads in one frame:**
 
 ```bash
-java BeadFinder 25 180.0 data/run_1/frame00001.jpg
+java Main beads 25 180.0 data/run_1/frame00001.jpg
 ```
 
-_Expected Output Format:_
-
-```text
+```
 29 (214.7241,  82.8276)
 36 (223.6111, 116.6667)
 42 (260.2381, 234.8571)
-35 (266.0286, 315.7143)
-31 (286.5806, 355.4516)
 ...
 ```
 
-### Step 2: Track Displacements Across Sequential Frames
+**Print displacements for two consecutive frames:**
 
 ```bash
-java BeadTracker 25 180.0 25.0 data/run_1/frame00000.jpg data/run_1/frame00001.jpg
+java Main track 25 180.0 25.0 data/run_1/frame00000.jpg data/run_1/frame00001.jpg
 ```
 
-_Expected Output Format:_
-
-```text
+```
 7.1833
 4.7932
 2.1693
-5.5287
-5.4292
-4.3962
 ...
 ```
 
-### Step 3: Estimate Physical Constants via Pipeline
+**Estimate physical constants from an entire run:**
 
 ```bash
-java BeadTracker 25 180.0 25.0 data/run_1/*.jpg | java Avogadro
+java Main estimate 25 180.0 25.0 data/run_1/*.jpg
 ```
 
-_Expected Output:_
-
-```text
-Boltzmann = 1.2535e-23
-Avogadro  = 6.6329e+23
+```
+Boltzmann = 1.2535E-23
+Avogadro  = 6.6329E+23
 ```
 
 ---
 
 ## 📊 Datasets
 
-The repository contains 10 experimental datasets recorded at 2 frames per second ($\Delta t = 0.5\text{ s}$):
+Ten experimental microscopy datasets are included, each recorded at **2 frames per second** (Δt = 0.5 s):
 
-- `data/mp4/run_1.mp4` through `run_10.mp4`: Microscopic video recordings.
-- `data/run_1/` through `data/run_10/`: Sequential frame sequences (200 JPEG frames per run, $640 \times 480$ resolution).
+| Path | Contents |
+|---|---|
+| `data/mp4/run_1.mp4` … `run_10.mp4` | Raw microscopy video recordings |
+| `data/run_1/` … `data/run_10/` | 200 JPEG frames per run, 640 × 480 px |
+| `data/brownian.gif` | Animated overview of Brownian motion |
