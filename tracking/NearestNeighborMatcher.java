@@ -5,9 +5,16 @@ import java.util.List;
 
 import model.IBlob;
 
+/**
+ * Greedy nearest-neighbor matcher associating each bead in current frame to the nearest bead in previous frame.
+ */
 public class NearestNeighborMatcher implements BeadMatcher {
     @Override
     public List<Double> matchDistance(List<IBlob> current, List<IBlob> previous, double maxDistance) {
+        if (current == null || previous == null || current.isEmpty() || previous.isEmpty()) {
+            return new ArrayList<>();
+        }
+
         List<Double> displacements = new ArrayList<>();
 
         for (int i = 0; i < current.size(); i++) {

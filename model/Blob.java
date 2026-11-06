@@ -1,5 +1,8 @@
 package model;
 
+/**
+ * Accumulator implementation of {@link IBlob} tracking center-of-mass on demand.
+ */
 public class Blob implements IBlob {
     private double sumX;
     private double sumY;
@@ -13,11 +16,17 @@ public class Blob implements IBlob {
 
     @Override
     public double getCenterX() {
+        if (this.mass == 0) {
+            return Double.NaN;
+        }
         return this.sumX / this.mass;
     }
 
     @Override
     public double getCenterY() {
+        if (this.mass == 0) {
+            return Double.NaN;
+        }
         return this.sumY / this.mass;
     }
 

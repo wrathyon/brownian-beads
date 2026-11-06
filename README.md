@@ -61,14 +61,15 @@ brownian-beads/
 │
 ├── model/                         # Domain abstractions
 │   ├── IBlob.java                 # Particle interface (centroid, mass, distance)
-│   └── Blob.java                  # Accumulator implementation (centre-of-mass tracking)
+│   ├── Blob.java                  # Accumulator implementation (centre-of-mass tracking)
+│   └── BlobFactory.java           # Factory creating IBlob instances
 │
 ├── imaging/                       # Image I/O and pixel classification
 │   ├── Picture.java               # Princeton stdlib Picture wrapper (pixel-level access)
 │   ├── PixelClassifier.java       # Interface: isForeground(Color) + getForegroundPixels()
 │   ├── LuminanceClassifier.java   # ITU-R luminance threshold classifier
-│   ├── ImageConvertor.java        # Interface: convert(Picture) → Picture
-│   └── GrayscaleConvertor.java    # Binarises an image using a PixelClassifier
+│   ├── ImageConverter.java        # Interface: convert(Picture) → Picture
+│   └── GrayscaleConverter.java    # Binarises an image using a PixelClassifier
 │
 ├── detecting/                     # Connected-component analysis
 │   ├── BlobDetector.java          # 4-connected DFS over foreground pixel grid
@@ -147,7 +148,7 @@ public interface IBlob {
 }
 ```
 
-`Blob` implements `IBlob` by accumulating pixel-coordinate sums and dividing on demand.
+`Blob` implements `IBlob` by accumulating pixel-coordinate sums and dividing on demand. `BlobFactory` encapsulates `IBlob` instantiation.
 
 ---
 
@@ -164,8 +165,8 @@ public interface PixelClassifier {
 public class LuminanceClassifier implements PixelClassifier { … }
 
 // Converts a colour Picture to a binary (white/black) Picture
-public interface ImageConvertor { Picture convert(Picture image); }
-public class GrayscaleConvertor implements ImageConvertor { … }
+public interface ImageConverter { Picture convert(Picture image); }
+public class GrayscaleConverter implements ImageConverter { … }
 ```
 
 ---
@@ -199,7 +200,7 @@ public class NearestNeighborMatcher implements BeadMatcher { … }
 
 // Iterates consecutive frame pairs and collects displacements
 public class BeadTracker {
-    public BeadTracker(List<List<IBlob>> blobsList);
+    public BeadTracker(List<List<IBlob>> blobsList, BeadMatcher beadMatcher);
     public List<List<Double>> trackDistance(double maxDistance);
 }
 ```
@@ -219,6 +220,7 @@ public class PhysicalConstants {
 
 public class Estimator {
     public Estimator(List<Double> displacements);  // pixel displacements
+    public double calculateDiffusion();
     public double calculateBoltzmann();
     public double calculateAvogadro();
 }
