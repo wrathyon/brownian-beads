@@ -57,37 +57,37 @@ flowchart TD
 
 ```text
 brownian-beads/
-├── Main.java                      # Unified CLI entry point (beads / track / estimate)
+├── Main.java                        # Unified CLI entry point (beads / track / estimate)
 │
-├── model/                         # Domain abstractions
-│   ├── IBlob.java                 # Particle interface (centroid, mass, distance)
-│   ├── Blob.java                  # Accumulator implementation (centre-of-mass tracking)
-│   └── BlobFactory.java           # Factory creating IBlob instances
+├── model/                           # Domain abstractions
+│   ├── IBlob.java                   # Particle interface (centroid, mass, distance)
+│   ├── Blob.java                    # Accumulator implementation (centre-of-mass tracking)
+│   └── BlobFactory.java             # Factory creating IBlob instances
 │
-├── imaging/                       # Image I/O and pixel classification
-│   ├── Picture.java               # Princeton stdlib Picture wrapper (pixel-level access)
-│   ├── PixelClassifier.java       # Interface: isForeground(Color) + getForegroundPixels()
-│   ├── LuminanceClassifier.java   # ITU-R luminance threshold classifier
-│   ├── ImageConverter.java        # Interface: convert(Picture) → Picture
-│   └── GrayscaleConverter.java    # Binarises an image using a PixelClassifier
+├── imaging/                         # Image I/O and pixel classification
+│   ├── Picture.java                 # Princeton stdlib Picture wrapper (pixel-level access)
+│   ├── PixelClassifier.java         # Interface: isForeground(Color) + getForegroundPixels()
+│   ├── LuminanceClassifier.java     # ITU-R luminance threshold classifier
+│   ├── ImageConverter.java          # Interface: convert(Picture) → Picture
+│   └── GrayscaleConverter.java      # Binarises an image using a PixelClassifier
 │
-├── detecting/                     # Connected-component analysis
-│   ├── BlobDetector.java          # 4-connected DFS over foreground pixel grid
-│   └── BeadFinder.java            # Static filter: keeps blobs with mass ≥ min
+├── detecting/                       # Connected-component analysis
+│   ├── BlobDetector.java            # 4-connected DFS over foreground pixel grid
+│   └── BeadFinder.java              # Static filter: keeps blobs with mass ≥ min
 │
-├── tracking/                      # Multi-frame particle correspondence
-│   ├── BeadMatcher.java           # Interface: matchDistance(current, previous, maxDist)
-│   ├── NearestNeighborMatcher.java# Greedy nearest-neighbour implementation
-│   └── BeadTracker.java           # Iterates consecutive frame pairs
+├── tracking/                        # Multi-frame particle correspondence
+│   ├── BeadMatcher.java             # Interface: matchDistance(current, previous, maxDist)
+│   ├── NearestNeighborMatcher.java  # Greedy nearest-neighbour implementation
+│   └── BeadTracker.java             # Iterates consecutive frame pairs
 │
-├── physics/                       # Statistical physics
-│   ├── PhysicalConstants.java     # T, η, r, s, R constants
-│   └── Estimator.java             # Variance → D → k → N_A
+├── physics/                         # Statistical physics
+│   ├── PhysicalConstants.java       # T, η, r, s, R constants
+│   └── Estimator.java               # Variance → D → k → N_A
 │
 └── data/
-    ├── brownian.gif               # Annotated animation of Brownian motion
-    ├── mp4/run_1.mp4 … run_10.mp4 # Raw microscopy videos
-    └── run_1/ … run_10/           # 200 JPEG frames per run (640 × 480 px)
+    ├── brownian.gif                 # Annotated animation of Brownian motion
+    ├── mp4/run_1.mp4 … run_10.mp4   # Raw microscopy videos
+    └── run_1/ … run_10/             # 200 JPEG frames per run (640 × 480 px)
 ```
 
 ---
@@ -143,8 +143,8 @@ public interface IBlob {
     double getCenterX();               // x-coordinate of centroid
     double getCenterY();               // y-coordinate of centroid
     int    mass();                     // number of pixels in blob
-    void   add(double x, double y);   // accumulate a pixel
-    double distanceTo(IBlob that);    // Euclidean distance between centroids
+    void   add(double x, double y);    // accumulate a pixel
+    double distanceTo(IBlob that);     // Euclidean distance between centroids
 }
 ```
 
@@ -157,7 +157,7 @@ public interface IBlob {
 ```java
 // Strategy interface
 public interface PixelClassifier {
-    boolean    isForeground(Color color);
+    boolean     isForeground(Color color);
     boolean[][] getForegroundPixels(Picture image);
 }
 
@@ -211,11 +211,11 @@ public class BeadTracker {
 
 ```java
 public class PhysicalConstants {
-    public static final double TEMPERATURE    = 297.0;       // K
-    public static final double VISCOSITY      = 9.135E-4;    // N·s/m²
-    public static final double BEAD_RADIUS    = 0.5E-6;      // m
+    public static final double TEMPERATURE      = 297.0;     // K
+    public static final double VISCOSITY        = 9.135E-4;  // N·s/m²
+    public static final double BEAD_RADIUS      = 0.5E-6;    // m
     public static final double METERS_PER_PIXEL = 0.175E-6;  // m/px
-    public static final double GAS_CONSTANT   = 8.31446;     // J/(mol·K)
+    public static final double GAS_CONSTANT     = 8.31446;   // J/(mol·K)
 }
 
 public class Estimator {
@@ -290,12 +290,12 @@ java Main track 25 180.0 25.0 data/run_1/frame00000.jpg data/run_1/frame00001.jp
 **Estimate physical constants from an entire run:**
 
 ```bash
-java Main estimate 25 180.0 25.0 data/run_1/*.jpg
+java Main estimate 25 180.0 25.0 data/run_4/*.jpg
 ```
 
 ```
-Boltzmann = 1.2535E-23
-Avogadro  = 6.6329E+23
+Boltzmann = 1.3811E-23
+Avogadro  = 6.0201E+23
 ```
 
 ---
